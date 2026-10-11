@@ -1,0 +1,5 @@
+RFC vector ok
+typed sign and verify ok
+tamper and malformed tokens rejected
+algorithm and header restrictions ok
+key and size limits ok
