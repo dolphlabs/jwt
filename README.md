@@ -6,15 +6,15 @@ and `json` packages. Claims are your own JSON-compatible structs, so a service
 keeps a single statically typed representation and does not allocate a dynamic
 claims tree.
 
-## Install after release
+## Install
+
+Requires slang 0.2.2 or later. In your project's `slang.project`:
 
 ```text
 pkg jwt git https://github.com/dolphlabs/jwt.git tag v0.1.0 dir src/jwt
 ```
 
-After the repository is tagged `v0.1.0`, run `slangc get` and import `jwt`.
-This package folder is not published or tagged yet, so the pin is a release
-target rather than a resolvable dependency today.
+Then run `slangc get` and `import "jwt";`.
 
 ## Use
 
