@@ -1,0 +1,62 @@
+ok rfc8037 A.4 signature
+ok rfc8037 A.4 public key
+ok jwks keeps the 4 signing keys, skips enc and P-384
+ok cli RS256 verifies
+ok cli PS256 verifies
+ok cli ES256 verifies
+ok cli EdDSA verifies
+ok HS256 round trip
+ok HS384 round trip
+ok HS512 round trip
+ok RS256 round trip
+ok PS256 round trip
+ok ES256 round trip
+ok EdDSA round trip
+ok an HS256 header names its kid
+ok RS256 jwk round trip
+ok RS256 jwk has no private part
+ok PS256 jwk round trip
+ok PS256 jwk has no private part
+ok ES256 jwk round trip
+ok ES256 jwk has no private part
+ok EdDSA jwk round trip
+ok EdDSA jwk has no private part
+an HMAC key has no public half
+JWK contains private key material
+JWK contains secret key material
+JWK curve P-384 is not supported
+JWK alg RS512 is not supported for RSA
+JWK x is not canonical base64url
+JWKS has no usable signing key
+jwt algorithm is not accepted for these keys
+ok kid picks the key
+jwt key id is not known
+ok no kid: each key of the alg is tried
+jwt signature is invalid
+jwt key cannot sign: it is a public key
+HS384 key must contain at least 48 random bytes
+hmac_key takes HS256, HS384 or HS512
+jwt signature is invalid
+jwt algorithm is not accepted for these keys
+jwt uses an unsupported protected header parameter
+jwt uses an unsupported protected header parameter
+jwt uses an unsupported protected header parameter
+ok id token verifies
+ok id token nonce matches
+id token nonce does not match
+id token issuer does not match
+id token audience does not match
+id token has expired
+ok id token inside the leeway
+id token was issued in the future
+ok several audiences with azp
+id token authorized party does not match
+id token has several audiences and no authorized party
+id token is not valid yet
+id token lacks iss, aud, exp or iat, or has the wrong types
+JWKS URL must use https
+JWKS refresh interval must be 1 second up to the max age
+JWKS fetch failed: tls dial 127.0.0.1: Connection refused
+ok verify_jwks with the cached set
+jwt key id is not known
+ok id token through the jwks client
