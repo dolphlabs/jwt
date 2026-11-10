@@ -1,17 +1,21 @@
 # jwt
 
-Small, typed JWT support for slang backend services. The first release handles
-JWS Compact tokens with HS256 and uses slang's existing `crypto`, `encoding`,
-and `json` packages. Claims are your own JSON-compatible structs, so a service
+Small, typed JWT support for slang backend services: JWS Compact tokens with
+HS256/384/512, RS256, PS256, ES256 and EdDSA, keys bound to one algorithm,
+JWK and JWKS, a caching JWKS client, and OpenID Connect ID-token
+verification, over slang's `crypto`, `encoding`, `json` and `httpc` packages. Claims are your own JSON-compatible structs, so a service
 keeps a single statically typed representation and does not allocate a dynamic
 claims tree.
 
 ## Install
 
-Requires slang 0.2.2 or later. In your project's `slang.project`:
+v0.2.0 requires a slang built with the `crypto` additions (dolphlabs/slang
+PR "feat(crypto): add AEAD, Ed25519, ECDSA P-256, RSA signing, SHA-512,
+HKDF", the release after 0.2.5). v0.1.0 (HS256 only) works with slang 0.2.2
+or later. In your project's `slang.project`:
 
 ```text
-pkg jwt git https://github.com/dolphlabs/jwt.git tag v0.1.0 dir src/jwt
+pkg jwt git https://github.com/dolphlabs/jwt.git tag v0.2.0 dir src/jwt
 ```
 
 Then run `slangc get` and `import "jwt";`.
@@ -62,14 +66,90 @@ issuer, audience, subject, expiry, authorization, or replay policy is right for
 your service. Check those after verification. `valid_at` checks required `exp`
 and optional `nbf` NumericDate claims against caller-supplied Unix seconds.
 
+## Keys bound to an algorithm
+
+`sign`/`verify` above are HS256 with a raw secret. For anything else, make a
+`Key`, which carries its algorithm, and use `sign_with` and `verify_with`:
+
+```slang
+let signing = jwt.ec_private_key(scalar, "2026-11");          // ES256
+let token = jwt.sign_with(claims, signing ?? fallback);       // {"alg":"ES256","kid":"2026-11",...}
+
+let keys = jwt.parse_jwks(jwks_json);                         // result[[Key], str]
+let checked: result[AccessClaims, str] = jwt.verify_with(token, keys ?? []);
+```
+
+| Algorithm | Private key | Public key |
+|---|---|---|
+| HS256, HS384, HS512 | `hmac_key(alg, secret, kid)` (secret at least 32/48/64 bytes) | the same key |
+| RS256, PS256 | `rsa_private_key(alg, pem, kid)` | `rsa_public_key(alg, n, e, kid)` |
+| ES256 | `ec_private_key(scalar32, kid)` | `ec_public_key(x32, y32, kid)` |
+| EdDSA (Ed25519) | `ed25519_private_key(seed32, kid)` | `ed25519_public_key(pub32, kid)` |
+
+`public_of(key)` gives the publishable half, and `jwk_of(key)` gives its public
+JWK text for your own JWKS endpoint. `key_from_jwk(text)` and
+`parse_jwks(text)` read published keys (RSA, EC P-256, OKP Ed25519). A JWK
+without `alg` gets the one its type implies (RSA is RS256). Encryption keys
+and unsupported curves in a set are skipped, and private (`d`) or secret
+(`k`) members are refused.
+
+**Verification never lets the token choose the primitive.** The header's
+`alg` must be the algorithm of a key you passed, and its `kid`, when present,
+must be that key's. So an HS256 token "signed" with an RSA public key as the
+HMAC secret, the classic key-confusion attack, finds no HS256 key and fails.
+With no `kid`, each key of the header's algorithm is tried (at most 8). A
+duplicate or `null` `kid`, like `crit` and `b64`, is rejected, and `jku`,
+`x5u` and `jwk` headers are never used to find a key. The signature is
+checked before the claims are decoded. Verification fails with
+`jwt.ERR_UNKNOWN_KID` when the token names a kid none of the keys has.
+
+## JWKS client
+
+```slang
+let issuer_keys = jwt.new_jwks("https://www.googleapis.com/oauth2/v3/certs");
+// share one Jwks between every task
+let r: result[Claims, str] = jwt.verify_jwks(token, issuer_keys ?? fallback, deadline);
+```
+
+A `Jwks` fetches the set over HTTPS (https only) and keeps it for an hour, or
+less if the response's `Cache-Control: max-age` says so. A token with an
+unknown `kid` triggers one refetch and one retry, which is how a key rotation
+at the issuer is picked up. Fetches are rate-limited to one per 30 seconds,
+whatever triggers them, so a flood of tokens with made-up kids cannot make
+it hammer the issuer. Concurrent misses wait for one fetch rather than each
+starting their own. A failed refresh keeps the old keys, so a brief outage at
+the issuer does not log everyone out. `new_jwks_with(url, max_age_seconds,
+min_interval_seconds)` sets both bounds, and `jwks_set_keys` loads a set that
+arrived some other way.
+
+## OpenID Connect ID tokens
+
+```slang
+let rules = jwt.id_token_rules("https://accounts.google.com", client_id);
+rules.nonce = some(nonce_sent_with_the_login);
+let id: result[GoogleClaims, str] =
+    jwt.verify_id_token_jwks(token, google_keys, rules, now_unix_seconds, deadline);
+```
+
+`verify_id_token` (with keys) and `verify_id_token_jwks` (with a client)
+check the signature, then the rules of OpenID Connect Core 3.1.3.7 before
+decoding into your type:
+- `iss` equals the issuer exactly;
+- `aud` (a string or a list) contains your client id;
+- with several audiences, `azp` is present and equals it;
+- `exp` and `nbf` hold, within `leeway_seconds` (60 by default);
+- `iat` is not in the future;
+- the `nonce` matches when you set one.
+
+Each failure has its own error.
+
 ## Scope
 
-v1 deliberately supports only HS256 and one caller-selected key. It does not
-fetch keys from `kid`, `jku`, or `x5u`, and does not implement RS256, ES256,
-EdDSA, JWKS/OIDC, JWE, refresh, or revocation. Applications receiving tokens
-from an external identity provider need that provider's public-key algorithm
-and a trusted issuer-to-key configuration; this v1 package does not provide
-that path.
+Not implemented: JWE, JWS JSON serialization, OIDC discovery (configure the
+issuer and JWKS URL yourself), ES384/ES512/RS384/RS512, refresh tokens and
+revocation. `verify` and `verify_with` prove integrity and the claims' type;
+issuer, audience, expiry and authorization policy stay with you, or use
+`verify_id_token` for ID tokens.
 
 See [JWT_PRD.md](JWT_PRD.md) for requirements, tests, and the security
 boundary. The format follows [RFC 7515](https://www.rfc-editor.org/rfc/rfc7515.html),

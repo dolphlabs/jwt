@@ -374,6 +374,7 @@ fn has_unsupported_header(raw: bytes) -> bool {
     let i = skip_json_ws(raw, 0);
     let alg_seen = false;
     let typ_seen = false;
+    let kid_seen = false;
     if i >= len(raw) || raw[i] != 123 {
         return true;
     }
@@ -391,19 +392,24 @@ fn has_unsupported_header(raw: bytes) -> bool {
         }
         let is_alg = json_key_is(raw, i, 3);
         let is_typ = json_key_is(raw, i, 4);
+        let is_kid = json_key_is(raw, i, 5);
         if json_key_is(raw, i, 1) || json_key_is(raw, i, 2) ||
-           (is_alg && alg_seen) || (is_typ && typ_seen) {
+           (is_alg && alg_seen) || (is_typ && typ_seen) ||
+           (is_kid && kid_seen) {
             return true;
         }
         if is_alg { alg_seen = true; }
         if is_typ { typ_seen = true; }
+        if is_kid { kid_seen = true; }
         i = skip_json_string(raw, i);
         i = skip_json_ws(raw, i);
         if i >= len(raw) || raw[i] != 58 {
             return true;
         }
         i = skip_json_ws(raw, i + 1);
-        if is_typ && i < len(raw) && raw[i] == 110 {
+        // typ and kid may be absent, never null: the decoder would read
+        // a null as absent and a key choice must not hinge on that.
+        if (is_typ || is_kid) && i < len(raw) && raw[i] == 110 {
             return true;
         }
         i = skip_json_value(raw, i);
@@ -427,7 +433,7 @@ fn json_key_is(raw: bytes, start: int, name: int) -> bool {
     let at = 0;
     let matches = true;
     let wanted_len = 4;
-    if name == 2 || name == 3 || name == 4 { wanted_len = 3; }
+    if name == 2 || name == 3 || name == 4 || name == 5 { wanted_len = 3; }
     while i < len(raw) {
         let c = raw[i];
         if c == 34 {
@@ -481,6 +487,11 @@ fn header_key_byte(name: int, at: int) -> int {
         if at == 0 { return 97; }
         if at == 1 { return 108; }
         return 103;
+    }
+    if name == 5 {
+        if at == 0 { return 107; }
+        if at == 1 { return 105; }
+        return 100;
     }
     if at == 0 { return 116; }
     if at == 1 { return 121; }

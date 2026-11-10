@@ -40,6 +40,10 @@ The default API should be the short path. `Limits` and explicit `_with_limits` f
 
 RS256/ES256/EdDSA and public-key parsing; JWKS and OIDC discovery; JWE; JWS JSON serialization; token refresh, storage, revocation, or replay databases; HTTP middleware. Public-key/OIDC support can be added later as an independent algorithm family with keys bound to that one algorithm.
 
+## v2 scope (0.2.0)
+
+Added as that independent family: a `Key` bound to one of HS256/384/512, RS256, PS256, ES256 and EdDSA (RFC 8725 3.1); `sign_with`/`verify_with`, where the header's alg must be a passed key's and its kid narrows the choice; JWK and JWKS parsing (RFC 7517) that skips unusable keys and refuses private members; `jwk_of` for publishing; a JWKS client with expiry from Cache-Control, refetch on an unknown kid, a rate limit on fetches and stale-on-error; and OpenID Connect Core 3.1.3.7 ID-token checks. A duplicate or null `kid` header is rejected like `crit` and `b64`. Tested with RFC 8037 A.4, and with RS256, PS256, ES256 and EdDSA tokens and a JWKS produced by the openssl command-line tool and Python. Still out: JWE, JWS JSON, OIDC discovery, the 384/512-bit asymmetric algorithms.
+
 ## Validation and performance
 
 - Verify the RFC 7515 HS256 vector and a fixed RFC-derived signing vector; compare the complete emitted token with a Go standard-library implementation.
